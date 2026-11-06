@@ -1,0 +1,62 @@
+<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medicoes IoT - Wokwi / MQTT</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Arial,sans-serif;color:#152332;background:#f6f8fb} body{max-width:1060px;margin:30px auto;padding:0 18px}h1{font-size:1.65rem}h2{font-size:1.1rem;margin-top:26px}.card{background:white;border:1px solid #dce4eb;border-radius:14px;padding:20px;margin:15px 0}button{border:0;border-radius:8px;background:#1559bb;color:white;padding:11px 16px;cursor:pointer;font-weight:600;margin:5px 8px 5px 0}button:disabled{background:#93a5bd;cursor:not-allowed}.muted{color:#536273;font-size:.92rem}#status{font-weight:600}.ok{color:#148052}.bad{color:#b83b2f}.warn{background:#fff8e6;border-left:3px solid #cf973c;padding:12px 14px} table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums;font-size:.89rem}th,td{padding:9px;border-bottom:1px solid #e0e7ec;text-align:left}th{background:#f3f5fa}.scroll{overflow:auto}code{background:#edf2f7;padding:2px 5px;border-radius:5px}#log{height:150px;overflow:auto;background:#142332;color:#d3e5e5;padding:12px;border-radius:9px;font-size:.85rem;white-space:pre-wrap}input{padding:10px;border:1px solid #dce4eb;border-radius:8px;width:300px;max-width:100%}
+</style></head><body>
+<h1>Medições do botão de emergência — Aula 4</h1>
+<p class="muted">ESP32 virtual no Wokwi → broker EMQX → navegador. Este painel mede, em milissegundos, o tempo entre uma solicitação MQTT e a resposta de confirmação recebida. Os valores são <strong>tempos de ida e volta (RTT)</strong>, não uma medição direta apenas da transmissão.</p>
+<div class="card">
+<label><b>Prefixo MQTT</b> <input id="prefix" value="mackenzie/oic/botao_b71f92"></label><br>
+<button id="connect">1. Conectar ao broker</button> <span id="status" class="bad">Desconectado</span>
+<p class="muted">Servidor usado: <code>wss://broker.emqx.io:8084/mqtt</code>. A conexão depende da Internet e de uma biblioteca MQTT.js carregada online.</p>
+</div>
+<div class="card">
+<h2>2. Realizar quatro medições por componente</h2>
+<button class="test" data-type="SENSOR" disabled>Medir DHT22 (4 vezes)</button>
+<button class="test" data-type="LED" disabled>Medir LED (4 vezes)</button>
+<button class="test" data-type="BUZZER" disabled>Medir buzzer (4 vezes)</button>
+<button id="clear" style="background:#6b7280">Limpar dados</button>
+<p id="progress" class="muted">Primeiro inicie o Wokwi com o novo sketch e conecte este painel.</p>
+<div class="warn">Os tempos medidos no navegador são RTT (pedido → leitura/acionamento → confirmação recebida). O campo "tempo interno" é medido no ESP32 até concluir a leitura ou acionar a saída. Não os apresente como tempo exato do sensor até o broker: relógios dos dois lados não estão sincronizados.</div>
+</div>
+<div class="card"><h2>Resultados coletados</h2><div class="scroll"><table><thead><tr><th>Componente</th><th>Medida</th><th>RTT MQTT (ms)</th><th>Tempo interno ESP32 (ms)</th><th>Leitura / observação</th></tr></thead><tbody id="rows"><tr><td colspan="5" class="muted">Sem medições ainda.</td></tr></tbody></table></div><p id="averages" class="muted">As médias aparecerão após os testes.</p><button id="csv">Baixar resultados em CSV</button></div>
+<div class="card"><h2>Registro da comunicação</h2><div id="log">Aguardando conexão...</div></div>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>
+'use strict';
+const el=id=>document.getElementById(id);
+let client=null, connected=false, busy=false, sequence=0;
+const pending=new Map(), results=[];
+function log(msg){const l=el('log');l.textContent += `\n[${new Date().toLocaleTimeString('pt-BR')}] ${msg}`;l.scrollTop=l.scrollHeight;}
+function status(msg,ok){el('status').textContent=msg;el('status').className=ok?'ok':'bad';connected=!!ok;document.querySelectorAll('.test').forEach(b=>b.disabled=!ok||busy);}
+function tocsv(rows){return rows.map(a=>a.map(x=>'"'+String(x??'').replaceAll('"','""')+'"').join(';')).join('\r\n');}
+function refresh(){
+ const tbody=el('rows');tbody.textContent='';if(!results.length){const tr=tbody.insertRow();const td=tr.insertCell();td.colSpan=5;td.textContent='Sem medições ainda.';}
+ results.forEach(r=>{const tr=tbody.insertRow();[r.tipo,r.ordem,r.rtt.toFixed(2),r.interno.toFixed(3),r.obs].forEach(t=>{const td=tr.insertCell();td.textContent=String(t);});});
+ el('averages').textContent=['SENSOR','LED','BUZZER'].map(tipo=>{const a=results.filter(r=>r.tipo===tipo);if(!a.length)return `${tipo}: sem dados`;let med=a.reduce((s,r)=>s+r.rtt,0)/a.length;return `${tipo}: ${a.length} amostras, media RTT = ${med.toFixed(2)} ms`;}).join(' | ');
+}
+function waitReply(tipo,id){return new Promise((resolve,reject)=>{
+ const timer=setTimeout(()=>{pending.delete(id);reject(new Error('Sem resposta em 10s; confirme se o Wokwi esta rodando.'));},10000);
+ pending.set(id,{tipo,start:performance.now(),timer,resolve,reject});
+ const topic=el('prefix').value.trim()+'/medicao/pedido';
+ client.publish(topic,`${tipo}|${id}`,{qos:0,retain:false},err=>{if(err){clearTimeout(timer);pending.delete(id);reject(err);}});
+ });}
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+async function measure(tipo){if(!connected||busy)return;busy=true;status('Conectado — medindo...',true);document.querySelectorAll('.test').forEach(b=>b.disabled=true);el('progress').textContent='Executando quatro medições '+tipo+'...';
+ let ok=0;try{for(let i=1;i<=4;i++){const id=++sequence;try{const ack=await waitReply(tipo,id);const rtt=ack.rtt;const interno=Number(ack.payload.tempo_local_ms??NaN);if(!Number.isFinite(interno))throw new Error('Sem tempo interno na confirmacao.');results.push({tipo,ordem:i,rtt,interno,obs:tipo==='SENSOR'?`${ack.payload.temperatura} °C; ${ack.payload.umidade}%`:'Acionamento confirmado'});refresh();ok++;log(`${tipo} ${i}/4: RTT ${rtt.toFixed(2)} ms; interno ${interno.toFixed(3)} ms`);}catch(e){log(`${tipo} ${i}/4: ERRO ${e.message}`);} el('progress').textContent=`${tipo}: ${i}/4 tentativas (${ok} validas)`;await sleep(tipo==='SENSOR'?3100:1100);}}
+ finally{busy=false;status(connected?'Conectado':'Desconectado',connected);el('progress').textContent=`Fim do teste ${tipo}: ${ok}/4 amostras validas. ${ok<4?'Repita o teste para obter quatro resultados.':''}`;}}
+el('connect').onclick=()=>{if(client){try{client.end(true);}catch(e){}}if(!window.mqtt){status('Falha ao carregar MQTT.js (verifique Internet)',false);return;}
+ const prefix=el('prefix').value.trim();if(!prefix||prefix.includes('#')||prefix.includes('+')){status('Prefixo MQTT invalido',false);return;}
+ status('Conectando...',false);client=window.mqtt.connect('wss://broker.emqx.io:8084/mqtt',{clientId:'medicao_oic_'+Math.random().toString(36).slice(2,10),reconnectPeriod:3000,connectTimeout:10000,clean:true});
+ client.on('connect',()=>{status('Conectado',true);client.subscribe(prefix+'/medicao/resposta',{qos:0},err=>{log(err?'Erro ao assinar respostas: '+err:'Inscrito no topico de respostas');});log('Conectado ao broker EMQX.');});
+ client.on('reconnect',()=>status('Reconectando...',false));client.on('offline',()=>status('Desconectado',false));client.on('close',()=>status('Conexao encerrada',false));client.on('error',e=>log('Conexao: '+e.message));
+ client.on('message',(topic,raw)=>{if(topic!==el('prefix').value.trim()+'/medicao/resposta')return;let reply;try{reply=JSON.parse(raw.toString());}catch(e){log('Recebida resposta nao JSON');return;}
+ const p=pending.get(Number(reply.id));if(!p||reply.tipo!==p.tipo)return;pending.delete(Number(reply.id));clearTimeout(p.timer);if(reply.erro){p.reject(new Error(reply.erro));return;}p.resolve({payload:reply,rtt:performance.now()-p.start});});
+};
+document.querySelectorAll('.test').forEach(b=>b.onclick=()=>measure(b.dataset.type));
+el('clear').onclick=()=>{if(busy)return;results.length=0;refresh();log('Resultados apagados deste painel.');};
+el('csv').onclick=()=>{if(!results.length){alert('Realize as medicoes primeiro.');return;}
+const rows=[['Componente','Medida','RTT_MQTT_ms','Tempo_interno_ESP32_ms','Observacao'],...results.map(r=>[r.tipo,r.ordem,r.rtt.toFixed(2),r.interno.toFixed(3),r.obs])];
+const blob=new Blob(['\ufeff',tocsv(rows)],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='medicoes_wokwi_mqtt.csv';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000);};
+refresh();
+</script></body></html>
