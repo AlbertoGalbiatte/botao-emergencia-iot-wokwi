@@ -80,3 +80,16 @@ evidencias/                 Local reservado às capturas reais do Wokwi/MQTTX
 
 **Link da demonstração no Wokwi:** inserir aqui quando for compartilhado/publicado.  
 **Link do vídeo no YouTube:** inserir depois da gravação e publicação (não listado).
+
+## Integrantes do projeto
+
+Projeto acadêmico desenvolvido para a disciplina **Objetos Inteligentes Conectados**, da Faculdade de Computação e Informática da **Universidade Presbiteriana Mackenzie (UPM)**.
+
+**Integrantes:**
+- **Alberto Edson Galbiatte Junior** — RA: 10110306
+- **Lucas Cardoso Loureiro Souto** — RA: 10725746
+- **Melissa de Souza Venturim Pacheco** — RA: 10740141
+
+**Professor responsável:** Tomaz Mikio Sasaki
+
+**Instituição:** Universidade Presbiteriana Mackenzie — São Paulo/SP.
