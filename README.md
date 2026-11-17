@@ -79,7 +79,6 @@ evidencias/                 Local reservado às capturas reais do Wokwi/MQTTX
 - Não oferece confirmação do recebimento por cuidadores nem serviço de emergência.
 
 **Link da demonstração no Wokwi:** https://www.youtube.com/watch?v=-rTnZnC4kqI
-**Link do vídeo no YouTube:** https://www.youtube.com/watch?v=-rTnZnC4kqI
 
 ## Integrantes do projeto
 
