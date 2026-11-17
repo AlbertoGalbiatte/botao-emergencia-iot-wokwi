@@ -78,8 +78,8 @@ evidencias/                 Local reservado às capturas reais do Wokwi/MQTTX
 - O protótipo não identifica quedas ou problemas médicos: o alerta é disparado manualmente pelo botão ou pelo comando remoto.
 - Não oferece confirmação do recebimento por cuidadores nem serviço de emergência.
 
-**Link da demonstração no Wokwi:** inserir aqui quando for compartilhado/publicado.  
-**Link do vídeo no YouTube:** inserir depois da gravação e publicação (não listado).
+**Link da demonstração no Wokwi:** https://www.youtube.com/watch?v=-rTnZnC4kqI
+**Link do vídeo no YouTube:** https://www.youtube.com/watch?v=-rTnZnC4kqI
 
 ## Integrantes do projeto
 
